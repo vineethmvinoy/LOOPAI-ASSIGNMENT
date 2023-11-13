@@ -40,7 +40,10 @@ def find_Times(curr,row,local_tz):
     for storeHours in thour:
       startHr=storeHours[2]
       closHr=storeHours[3]
+      #retrieve the local hours
+    
     temp_Timestamp=datetime(localTime.year,localTime.month,localTime.day)
     closHr=datetime.combine(temp_Timestamp,closHr)
     startHr=datetime.combine(temp_Timestamp,startHr)
+    #Convert the retrieved hours in to a specific to date easier comparison using the local time's date
   return localTime,startHr,closHr
