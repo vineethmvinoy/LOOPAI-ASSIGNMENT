@@ -1,6 +1,6 @@
 from dbConnect import dbConnect
 from find_tz import find_tz
-from datetime import datetime,tzinfo
+from datetime import datetime,timedelta
 from pytz import timezone
 import pytz
 from find_Times import find_Times
@@ -59,13 +59,18 @@ def logic(report_id,limit):
         
         tcount=0 
         #count variable to keep track of the number of rows and to see if it is first or last row
+        Hour_complete=False
+        Day_complete=False
+        Week_complete=False
+
         for row2 in store_status:   
         #Inner Loop to iterate through all the active/inactive timestamps from store_status table
             
+           
             
             timeDifference=0
             #assigning the timedifference between two timestamp to be initially zero
-            localTime,startHr,closHr=find_Times(curr,row2,local_Timezone)
+            localTime,startHr,closHr=find_Times(curr,row2,local_Timezone)            
             if(localTime.timestamp()<startHr.timestamp()):
               continue
             #As we Only have to find downtime during business hours any timestamp after the business hours is not dealt with
@@ -99,23 +104,35 @@ def logic(report_id,limit):
 
             timeTotal=timeTotal+timeDifference
             #timeTotal contains all the downtime hours     
-            absolute_TimeDifference=secondaryprev_MaxTime.timestamp()-localTime.timestamp()
-            if(absolute_TimeDifference<=3600):
-                if(timeTotal>3600):
-                  downtime_last_hour=3600
-                else:
-                  downtime_last_hour=timeTotal
-            if(absolute_TimeDifference<=86400):
-                if(timeTotal>86400):
-                  downtime_last_day=86400
-                else:
-                  downtime_last_day=timeTotal
-            if(absolute_TimeDifference<=604800):
-                if(timeTotal>=604800):
-                  downtime_last_week=604800
-                else:
-                  downtime_last_week=timeTotal       
-            prev_MaxTime=localTime  
+            triggerTimeToLocalTimeDifference=secondaryprev_MaxTime.timestamp()-localTime.timestamp()
+            #triggerTimeToLocalTimeDifference is a variable used to keep track of the time passed while iterating backwards to check if we passed an hour,day or a week
+            OneHrBeforeTriggerTime=secondaryprev_MaxTime-timedelta(hours=1)
+            if(Hour_complete==False):
+              if(localTime.timestamp()>OneHrBeforeTriggerTime.timestamp() and prev_MaxTime.time()>secondaryprev_MaxTime.timestamp() and localTime.timestamp()<secondaryprev_MaxTime.timestamp()):
+                downtime_last_hour=secondaryprev_MaxTime.timestamp()-localTime.timestamp()
+              if(localTime.timestamp()>OneHrBeforeTriggerTime.timestamp() and localTime.timestamp()<secondaryprev_MaxTime.timestamp() and prev_MaxTime.timestamp()<secondaryprev_MaxTime.timestamp() and prev_MaxTime.timestamp()>OneHrBeforeTriggerTime.timestamp()):
+                downtime_last_hour=timeTotal
+              elif(localTime.timestamp()<OneHrBeforeTriggerTime.timestamp() and prev_MaxTime.timestamp()>OneHrBeforeTriggerTime.timestamp()):
+                downtime_last_hour+=prev_MaxTime.timestamp()-OneHrBeforeTriggerTime.timestamp()
+                Hour_complete=True
+            OneDayBeforeTriggerTime=secondaryprev_MaxTime-timedelta(days=1)
+            if(Day_complete==False):
+              if(localTime.timestamp()>OneDayBeforeTriggerTime.timestamp() and prev_MaxTime.timestamp()>secondaryprev_MaxTime.timestamp() and localTime.timestamp()<secondaryprev_MaxTime.timestamp()):
+                downtime_last_day=secondaryprev_MaxTime.timestamp()-localTime.timestamp()
+              if(localTime.timestamp()>OneDayBeforeTriggerTime.timestamp() and localTime.timestamp()<secondaryprev_MaxTime.timestamp() and prev_MaxTime.timestamp()<secondaryprev_MaxTime.timestamp() and prev_MaxTime.timestamp()>OneDayBeforeTriggerTime.timestamp()):
+                downtime_last_day=timeTotal
+              elif(localTime.timestamp()<OneDayBeforeTriggerTime.timestamp() and prev_MaxTime.timestamp()>OneDayBeforeTriggerTime.timestamp()):
+                downtime_last_day+=prev_MaxTime.timestamp()-OneDayBeforeTriggerTime.timestamp()
+                Day_complete=True
+            OneWeekBeforeTriggerTime=secondaryprev_MaxTime-timedelta(weeks=1)
+            if(Week_complete==False):
+              if(localTime.timestamp()>OneWeekBeforeTriggerTime.timestamp() and prev_MaxTime.timestamp()>secondaryprev_MaxTime.timestamp() and localTime.timestamp()<secondaryprev_MaxTime.timestamp()):
+                downtime_last_week=secondaryprev_MaxTime.timestamp()-localTime.timestamp()
+              if(localTime.timestamp()>OneWeekBeforeTriggerTime.timestamp() and localTime.timestamp()<secondaryprev_MaxTime.timestamp() and prev_MaxTime.timestamp()<secondaryprev_MaxTime.timestamp() and prev_MaxTime.timestamp()>OneWeekBeforeTriggerTime.timestamp()):
+                downtime_last_week=timeTotal
+              elif(localTime.timestamp()<OneDayBeforeTriggerTime.timestamp() and prev_MaxTime.timestamp()>OneDayBeforeTriggerTime.timestamp()):
+                downtime_last_week+=prev_MaxTime.timestamp()-OneWeekBeforeTriggerTime.timestamp()
+                Week_complete=True                  
             tempRow=row2       
         finaldata.append(
                             {
