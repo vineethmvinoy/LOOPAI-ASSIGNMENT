@@ -6,7 +6,7 @@ import pytz
 from find_Times import find_Times
 import psycopg2
 
-max_Datetime=datetime.strptime("2023-01-25 18:13:22.47922","%Y-%m-%d %H:%M:%S.%f")
+triggerTime=datetime.strptime("2023-01-25 18:13:22.47922","%Y-%m-%d %H:%M:%S.%f")
 #HardCoding the MaxTime in the database to simulate time of report call
 
 finaldata=[]
@@ -36,105 +36,86 @@ def logic(report_id,limit):
         curr.execute(f'select * from store_status where store_id={row[0]} order by store_status.timestamp_utc desc')
         #Query to find all the timestamp of a store in descending order to iterate from closing hour to starting hour
         store_status=curr.fetchall()
-        for tRow in store_status:
-          tempRow=tRow
+        for Row_Iterator in store_status:
+          tempRow=Row_Iterator
           break
         #A Loop that runs one time to find the first row and assign it as tempRow as tempRow is used to calculate timedifference from the localtime 
         count=curr.rowcount #Getting the total number of rows to see if its the last row or first row
         
-        local_tz=find_tz(curr,row[0])
+        local_Timezone=find_tz(curr,row[0])
         downtime_last_hour=0 #Variable assigned to 0 before each timestamp is calculated
         downtime_last_day=0  #Only Used downtime because uptime=workinghours-uptime
         downtime_last_week=0
-        tempMax=max_Datetime
-          #tempMax is initially assigned as the maxtimestamp datetime value,later 
+        prev_MaxTime=triggerTime
+          #prev_MaxTime is initially assigned as the maxtimestamp datetime value,later 
         #in the inner loop it is assigned to the datetime value of the tempRow tuple
         
-        tempMax=tempMax.replace(tzinfo=pytz.UTC) 
-        tempMax=tempMax.astimezone(local_tz) 
-        #Here tempMax that is the max datetime is converted to the localtime of that store
+        prev_MaxTime=prev_MaxTime.replace(tzinfo=pytz.UTC) 
+        prev_MaxTime=prev_MaxTime.astimezone(local_Timezone) 
+        #Here prev_MaxTime that is the max datetime is converted to the localtime of that store
         
-        secondarytempMax=tempMax 
+        secondaryprev_MaxTime=prev_MaxTime 
         #storing converted max_timestamp to later compare if an hour,day, or a week has passed
         
         tcount=0 
         #count variable to keep track of the number of rows and to see if it is first or last row
-        
         for row2 in store_status:   
         #Inner Loop to iterate through all the active/inactive timestamps from store_status table
             
-            localTime,startHr,closHr=find_Times(curr,row2,local_tz)
+            
             timeDifference=0
             #assigning the timedifference between two timestamp to be initially zero
-            
+            localTime,startHr,closHr=find_Times(curr,row2,local_Timezone)
             if(localTime.timestamp()<startHr.timestamp()):
               continue
             #As we Only have to find downtime during business hours any timestamp after the business hours is not dealt with
             
             if(localTime.timestamp()>closHr.timestamp()):
-              tempMax=localTime
+              prev_MaxTime=localTime
               tempRow=row2
               continue
             #If the locatime is greater than the closing time we keep max time to be closing time 
 
             if(row2[1].strip()=='active' and tempRow[1].strip()=='active'):
-              tempMax=localTime  
+              prev_MaxTime=localTime  
               tempRow=row2
               continue
             #if we find the current row of timestamp and the previous row have an active status then we avoid the row while counting downtime
 
             if(tcount==count):
               if(row2[1].strip=='inactive'):
-                timeDifference=tempMax.timestamp()-startHr.timestamp()
+                timeDifference=prev_MaxTime.timestamp()-startHr.timestamp()
             #if its the last row and the status is inactive then the difference will be previousRow_timestamp-StartingHour_timestamp
             
-            if(tempMax.timestamp()>=closHr.timestamp()):
-              tempMax=closHr
+            if(prev_MaxTime.timestamp()>=closHr.timestamp()):
+              prev_MaxTime=closHr
               if(tempRow[1].strip()=='inactive'):
-                timeDifference=tempMax.timestamp()-localTime.timestamp()
-            #if the tempMax is greater than closing hour but current row has status inactive we calculate difference from closing hour
+                timeDifference=prev_MaxTime.timestamp()-localTime.timestamp()
+            #if the prev_MaxTime is greater than closing hour but current row has status inactive we calculate difference from closing hour
             
             elif(row2[1].strip()=='inactive' or tempRow[1].strip()=='inactive'):
-              timeDifference=tempMax.timestamp()-localTime.timestamp()
+              timeDifference=prev_MaxTime.timestamp()-localTime.timestamp()
             #if either the previous or current row has status as inactive we compute difference between their timestamps
 
             timeTotal=timeTotal+timeDifference
             #timeTotal contains all the downtime hours     
-            absolute_TimeDifference=secondarytempMax.timestamp()-localTime.timestamp()
+            absolute_TimeDifference=secondaryprev_MaxTime.timestamp()-localTime.timestamp()
             if(absolute_TimeDifference<=3600):
                 if(timeTotal>3600):
                   downtime_last_hour=3600
                 else:
                   downtime_last_hour=timeTotal
-            elif(absolute_TimeDifference>3600 and ((row2[1].strip()=='inactive' and tempRow[1].strip()=='inactive') or(row2[1].strip()=='active') and tempRow[1].strip()=='inactive')):
-              if(downtime_last_hour+timeDifference>3600):
-                downtime_last_hour=3600
-              else:
-                downtime_last_hour=timeTotal
-            # elif(absolute_TimeDifference>3600 and (row2[1].strip()=='inactive' and tempRow[1].strip()=='active')):
-            #   if(downtime_last_hour+timeDifference>3600):
-            #     downtime_last
             if(absolute_TimeDifference<=86400):
                 if(timeTotal>86400):
                   downtime_last_day=86400
                 else:
                   downtime_last_day=timeTotal
-            elif(absolute_TimeDifference>86400 and (row2[1].strip()=='inactive' and tempRow[1].strip()=='inactive')):
-                if(downtime_last_hour+timeDifference>86400):
-                  downtime_last_hour=86400
-                else:
-                  downtime_last_hour-timeTotal            
             if(absolute_TimeDifference<=604800):
                 if(timeTotal>=604800):
                   downtime_last_week=604800
                 else:
-                  downtime_last_week=timeTotal
-            elif(absolute_TimeDifference>604800 and (row2[1].strip()=='inactive' and tempRow[1].strip()=='inactive')):
-                if(downtime_last_hour+timeDifference>604800):
-                  downtime_last_hour=604800
-                else:
-                  downtime_last_hour-timeTotal            
-            tempMax=localTime  
+                  downtime_last_week=timeTotal       
+            prev_MaxTime=localTime  
             tempRow=row2       
         finaldata.append(
                             {
@@ -157,6 +138,7 @@ def logic(report_id,limit):
         curr.execute('INSERT INTO public."REPORTS" VALUES(%s,%s,%s,%s,%s,%s,%s,%s)',(report_id,store_id,uptime_last_hour,uptime_last_day,uptime_last_week,downtime_last_hour,downtime_last_day,downtime_last_week)) 
     curr.execute('UPDATE public."REPORT_MAPPING" SET status=%s where report_id=%s',('COMPLETED',report_id))  
     conn.commit()
+    
   except Exception as error:
     print(error) 
   finally:
