@@ -37,9 +37,9 @@ def logic(report_id,limit):
         #Query to find all the timestamp of a store in descending order to iterate from closing hour to starting hour
         store_status=curr.fetchall()
         for Row_Iterator in store_status:
-          tempRow=Row_Iterator
+          prev_StatusRow=Row_Iterator
           break
-        #A Loop that runs one time to find the first row and assign it as tempRow as tempRow is used to calculate timedifference from the localtime 
+        #A Loop that runs one time to find the first row and assign it as prev_StatusRow as prev_StatusRow is used to calculate timedifference from the localtime 
         count=curr.rowcount #Getting the total number of rows to see if its the last row or first row
         
         local_Timezone=find_tz(curr,row[0])
@@ -48,7 +48,7 @@ def logic(report_id,limit):
         downtime_last_week=0
         prev_MaxTime=triggerTime
           #prev_MaxTime is initially assigned as the maxtimestamp datetime value,later 
-        #in the inner loop it is assigned to the datetime value of the tempRow tuple
+        #in the inner loop it is assigned to the datetime value of the prev_StatusRow tuple
         
         prev_MaxTime=prev_MaxTime.replace(tzinfo=pytz.UTC) 
         prev_MaxTime=prev_MaxTime.astimezone(local_Timezone) 
@@ -76,13 +76,13 @@ def logic(report_id,limit):
             
             if(localTime.timestamp()>closHr.timestamp()):
               prev_MaxTime=localTime
-              tempRow=row2
+              prev_StatusRow=row2
               continue
             #If the locatime is greater than the closing time we keep max time to be closing time 
 
-            if(row2[1].strip()=='active' and tempRow[1].strip()=='active'):
+            if(row2[1].strip()=='active' and prev_StatusRow[1].strip()=='active'):
               prev_MaxTime=localTime  
-              tempRow=row2
+              prev_StatusRow=row2
               continue
             #if we find the current row of timestamp and the previous row have an active status then we avoid the row while counting downtime
 
@@ -93,11 +93,11 @@ def logic(report_id,limit):
             
             if(prev_MaxTime.timestamp()>=closHr.timestamp()):
               prev_MaxTime=closHr
-              if(tempRow[1].strip()=='inactive'):
+              if(prev_StatusRow[1].strip()=='inactive'):
                 timeDifference=prev_MaxTime.timestamp()-localTime.timestamp()
             #if the prev_MaxTime is greater than closing hour but current row has status inactive we calculate difference from closing hour
             
-            elif(row2[1].strip()=='inactive' or tempRow[1].strip()=='inactive'):
+            elif(row2[1].strip()=='inactive' or prev_StatusRow[1].strip()=='inactive'):
               timeDifference=prev_MaxTime.timestamp()-localTime.timestamp()
             #if either the previous or current row has status as inactive we compute difference between their timestamps
 
@@ -152,7 +152,7 @@ def logic(report_id,limit):
                 downtime_last_week+=prev_MaxTime.timestamp()-OneWeekBeforeTriggerTime.timestamp()
                 Week_complete=True   
             prev_MaxTime=localTime               
-            tempRow=row2       
+            prev_StatusRow=row2       
 
         uptime_last_hour=round(60-downtime_last_hour/60,1)
         uptime_last_day= round(abs(closHr.timestamp()/3600-startHr.timestamp()/3600)-downtime_last_day/3600,1)
